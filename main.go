@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"io/ioutil"
 	"strings"
 	"syscall"
 
@@ -14,15 +15,25 @@ import (
 
 func init() {
 	flag.StringVar(&token, "t", "", "Bot Token")
+	flag.StringVar(&tokenfile, "tf", "", "Bot token file path")
 	flag.Parse()
 }
 
 var token string
+var tokenfile string
 
 func main() {
 
+	if tokenfile != "" {
+		b, err := ioutil.ReadFile(tokenfile) // just pass the file name
+		if err != nil {
+			fmt.Print(err)
+			return
+		}
+		token = string(b)
+	}
 	if token == "" {
-		fmt.Println("No token provided. Please run: primitive-gobot -t <bot token>")
+		fmt.Println("No token provided. Please run: primitive-gobot -t <bot token> or  primitive-gobot -tf <bot token file path>")
 		return
 	}
 
@@ -49,7 +60,7 @@ func main() {
 	}
 
 	// Wait here until CTRL-C or other term signal is received.
-	fmt.Println("primitive-gobot is now running.  Press CTRL-C to exit.")
+	fmt.Println("primitive-gobot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
@@ -90,7 +101,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				fmt.Print(err.Error())
 			}
 			// put the primify stub here
-
 
 			// send the file back
 			s.ChannelFileSend(c.ID, "out.png", resp.Body)
