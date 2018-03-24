@@ -8,24 +8,32 @@ import (
 	"io/ioutil"
 	"strings"
 	"syscall"
-
+	"github.com/fogleman/primitive/primitive"
 	"github.com/bwmarrin/discordgo"
 	"net/http"
+	"time"
+	"bufio"
+	"image/png"
+	"image"
+	"io"
+	"github.com/nfnt/resize"
+	"runtime"
+	"math/rand"
+	"bytes"
 )
 
 func init() {
-	flag.StringVar(&token, "t", "", "Bot Token")
-	flag.StringVar(&tokenfile, "tf", "", "Bot token file path")
+	flag.StringVar(&token, "t", "", "Bot token")
+	flag.StringVar(&tokenFile, "tf", "", "Bot token file path")
 	flag.Parse()
 }
 
 var token string
-var tokenfile string
+var tokenFile string
 
 func main() {
-
-	if tokenfile != "" {
-		b, err := ioutil.ReadFile(tokenfile) // just pass the file name
+	if tokenFile != "" {
+		b, err := ioutil.ReadFile(tokenFile) // just pass the file name
 		if err != nil {
 			fmt.Print(err)
 			return
@@ -75,6 +83,7 @@ func ready(s *discordgo.Session, event *discordgo.Ready) {
 	s.UpdateStatus(0, "with themselves")
 }
 
+
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the autenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -92,18 +101,52 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			return
 		}
 
-		for _, attachment := range m.Attachments{
-			fmt.Printf("Getting attachment %s", attachment.URL)
+		commands := strings.Split(m.Content, " ")
+		commands = commands[1:]
 
+		var (
+			shapeNumber int
+			background  string
+			alpha       int
+			inputSize   int
+			outputSize  int
+			mode        int
+			workers     int
+			repeat      int
+		)
+
+		var b bytes.Buffer
+		writer := bufio.NewWriter(&b)
+		f1 := flag.FlagSet{}
+		f1.SetOutput(writer)
+		f1.Init("primitive-gobot", flag.ContinueOnError)
+		f1.IntVar(&shapeNumber, "n", 25, "number of primitives")
+		f1.StringVar(&background, "bg", "", "background color (hex)")
+		f1.IntVar(&alpha, "a", 128, "alpha value")
+		f1.IntVar(&inputSize, "r", 256, "resize large input images to this size")
+		f1.IntVar(&outputSize, "s", 1024, "output image size")
+		f1.IntVar(&mode, "m", 1, "0=combo 1=triangle 2=rect 3=ellipse 4=circle 5=rotatedrect 6=beziers 7=rotatedellipse 8=polygon")
+		f1.IntVar(&workers, "j", 0, "number of parallel workers (default uses all cores)")
+		f1.IntVar(&repeat, "rep", 0, "add N extra shapes per iteration with reduced search")
+		f1.Output()
+		err = f1.Parse(commands)
+		writer.Flush()
+
+		if err != nil {
+			s.ChannelMessageSend(c.ID, "```\n" + b.String() + "```")
+		}
+
+		for _, attachment := range m.Attachments {
 			// get the attachment
 			resp, err := http.Get(attachment.URL)
 			if err != nil {
-				fmt.Print(err.Error())
+				s.ChannelMessageSend(c.ID, err.Error())
 			}
-			// put the primify stub here
-
+			input, _, err := image.Decode(resp.Body)
 			// send the file back
-			s.ChannelFileSend(c.ID, "out.png", resp.Body)
+			output := primify(input, shapeNumber, background, alpha, inputSize, outputSize, mode, workers, repeat)
+
+			s.ChannelFileSend(c.ID, "out.png", output)
 		}
 	}
 }
@@ -111,7 +154,6 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 // This function will be called (due to AddHandler above) every time a new
 // guild is joined.
 func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
-
 	if event.Guild.Unavailable {
 		return
 	}
@@ -124,4 +166,46 @@ func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 	}
 }
 
+func primify(input image.Image, shapeNumber int, background string, alpha int,
+	inputSize int, outputSize int, shapeType int, workers int, extraShapes int) (io.Reader) {
+	// seed random number generator
+	rand.Seed(time.Now().UTC().UnixNano())
 
+	// determine worker count
+	if workers < 1 {
+		workers = runtime.NumCPU()
+	}
+
+	// scale down input image if needed
+	size := uint(inputSize)
+	if size > 0 {
+		input = resize.Thumbnail(size, size, input, resize.Bilinear)
+	}
+
+	// determine background color
+	var bg primitive.Color
+	if background == "" {
+		bg = primitive.MakeColor(primitive.AverageImageColor(input))
+	} else {
+		bg = primitive.MakeHexColor(background)
+	}
+
+	// run algorithm
+	model := primitive.NewModel(input, bg, outputSize, workers)
+	frame := 0
+
+	for i := 0; i < shapeNumber; i++ {
+		frame++
+		// find optimal shape and add it to the model
+		model.Step(primitive.ShapeType(shapeType), alpha, extraShapes)
+	}
+
+	// encode the model as a png image and write it to a buffer for later use
+	var b bytes.Buffer
+	writer := bufio.NewWriter(&b)
+	png.Encode(writer, model.Context.Image())
+	writer.Flush()
+
+	// return the output image in the buffer as a Reader for later use
+	return bufio.NewReader(&b)
+}
