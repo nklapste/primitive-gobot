@@ -8,10 +8,21 @@ Description
 A Discord bot that reproduces images with geometric primitives. Written in go.
 
 
-Installation
+Requirements
 ============
 
 First, `install Go <https://golang.org/doc/install>`_.
+
+Afterwards, the following go packages are needed:
+
+ - `discordgo <https://github.com/bwmarrin/discordgo>`_
+
+ - `primitive <https://github.com/fogleman/primitive>`_
+
+
+Installation
+============
+
 
 To install primitive-gobot simply run the following command:
 
