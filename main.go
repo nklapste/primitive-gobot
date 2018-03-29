@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"math/rand"
 	"bytes"
+	"github.com/satori/go.uuid"
 )
 
 func init() {
@@ -137,16 +138,27 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		for _, attachment := range m.Attachments {
+			s.ChannelMessageSend(c.ID, "Attempting to primify: " + attachment.Filename)
 			// get the attachment
 			resp, err := http.Get(attachment.URL)
 			if err != nil {
 				s.ChannelMessageSend(c.ID, err.Error())
+				continue
 			}
-			input, _, err := image.Decode(resp.Body)
-			// send the file back
-			output := primify(input, shapeNumber, background, alpha, inputSize, outputSize, mode, workers, repeat)
+			// decode the attachment into a image
+			inputImage, _, err := image.Decode(resp.Body)
+			if err != nil {
+				s.ChannelMessageSend(c.ID, err.Error())
+				continue
+			}
 
-			s.ChannelFileSend(c.ID, "out.png", output)
+			// convert the image into primitive image
+			outputPNG, outputSVG := primify(inputImage, shapeNumber, background, alpha, inputSize, outputSize, mode, workers, repeat)
+
+			// generate a unique id and return the primitive image
+			id, _ := uuid.NewV4()
+			s.ChannelFileSend(c.ID, id.String()+".png", outputPNG)
+			s.ChannelFileSend(c.ID, id.String()+".svg", outputSVG)
 		}
 	}
 }
@@ -166,8 +178,9 @@ func guildCreate(s *discordgo.Session, event *discordgo.GuildCreate) {
 	}
 }
 
+// api that interacts with "github.com/fogleman/primitive/primitive" to create primitive images
 func primify(input image.Image, shapeNumber int, background string, alpha int,
-	inputSize int, outputSize int, shapeType int, workers int, extraShapes int) (io.Reader) {
+	inputSize int, outputSize int, shapeType int, workers int, extraShapes int) (io.Reader, io.Reader) {
 	// seed random number generator
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -201,11 +214,15 @@ func primify(input image.Image, shapeNumber int, background string, alpha int,
 	}
 
 	// encode the model as a png image and write it to a buffer for later use
-	var b bytes.Buffer
-	writer := bufio.NewWriter(&b)
+	var PNGBuffer bytes.Buffer
+	writer := bufio.NewWriter(&PNGBuffer)
 	png.Encode(writer, model.Context.Image())
 	writer.Flush()
 
-	// return the output image in the buffer as a Reader for later use
-	return bufio.NewReader(&b)
+	// also save the model as its raw svg
+	var SVGBuffer bytes.Buffer
+	SVGBuffer.WriteString(model.SVG())
+
+	// return the output images (PNG, SVG) as a Readers for later use
+	return bufio.NewReader(&PNGBuffer), bufio.NewReader(&SVGBuffer)
 }
