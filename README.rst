@@ -19,10 +19,11 @@ Afterwards, the following go packages are needed:
 
  - `primitive <https://github.com/fogleman/primitive>`_
 
+ - `go.uuid <https://github.com/satori/go.uuid>`_
+
 
 Installation
 ============
-
 
 To install primitive-gobot simply run the following command:
 
