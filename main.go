@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"bytes"
 	"github.com/satori/go.uuid"
+	"strconv"
 )
 
 func init() {
@@ -90,7 +91,6 @@ func ready(s *discordgo.Session, event *discordgo.Ready) {
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// Ignore all messages created by the bot itself
-	// This isn't required in this specific example but it's a good practice.
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
@@ -116,6 +116,8 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			repeat      int
 		)
 
+		// instancing a FlagSet and capturing its output for parsing arguments sent
+		// through discord messages
 		var b bytes.Buffer
 		writer := bufio.NewWriter(&b)
 		f1 := flag.FlagSet{}
@@ -135,6 +137,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 		if err != nil {
 			s.ChannelMessageSend(c.ID, "```\n" + b.String() + "```")
+		}
+		if shapeNumber > 1000 {
+			s.ChannelMessageSend(c.ID, "`shapeNumber`: `" + strconv.Itoa(shapeNumber) + "` is too high! Please keep it below `1000`")
+			return
+		}
+		if repeat > 20 {
+			s.ChannelMessageSend(c.ID, "`repeat`: `" + strconv.Itoa(repeat) + "` is too high! Please keep it below `20`")
+			return
 		}
 
 		for _, attachment := range m.Attachments {
@@ -185,7 +195,7 @@ func primify(input image.Image, shapeNumber int, background string, alpha int,
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// determine worker count
-	if workers < 1 {
+	if workers < 1 || workers > runtime.NumCPU(){
 		workers = runtime.NumCPU()
 	}
 
