@@ -135,19 +135,19 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		writer.Flush()
 
 		if err != nil {
-			s.ChannelMessageSend(c.ID, "```\n" + b.String() + "```")
+			s.ChannelMessageSend(c.ID, "```\n"+b.String()+"```")
 		}
 		if shapeNumber > 1000 {
-			s.ChannelMessageSend(c.ID, "`shapeNumber`: `" + strconv.Itoa(shapeNumber) + "` is too high! Please keep it below `1000`")
+			s.ChannelMessageSend(c.ID, "`shapeNumber`: `"+strconv.Itoa(shapeNumber)+"` is too high! Please keep it below `1000`")
 			return
 		}
 		if repeat > 20 {
-			s.ChannelMessageSend(c.ID, "`repeat`: `" + strconv.Itoa(repeat) + "` is too high! Please keep it below `20`")
+			s.ChannelMessageSend(c.ID, "`repeat`: `"+strconv.Itoa(repeat)+"` is too high! Please keep it below `20`")
 			return
 		}
 
 		for _, attachment := range m.Attachments {
-			s.ChannelMessageSend(c.ID, "Attempting to primify: " + attachment.Filename)
+			s.ChannelMessageSend(c.ID, "Attempting to primify: "+attachment.Filename)
 			// get the attachment
 			resp, err := http.Get(attachment.URL)
 			if err != nil {
@@ -194,7 +194,7 @@ func primify(input image.Image, shapeNumber int, background string, alpha int,
 	rand.Seed(time.Now().UTC().UnixNano())
 
 	// determine worker count
-	if workers < 1 || workers > runtime.NumCPU(){
+	if workers < 1 || workers > runtime.NumCPU() {
 		workers = runtime.NumCPU()
 	}
 
